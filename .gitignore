@@ -1,0 +1,5 @@
+archives/
+mount/
+*.vnc
+sshfs*/
+
