@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# headless.sh				Last updated: 07-01-2022 From: xubuntu
+# headless.sh				Last updated: 08-01-2022 From: xubuntu
 # Author: Harvey Noel		email:harveynoel@pm.me
 
 #  This program is free software; you can redistribute it and/or modify
@@ -19,37 +19,35 @@
 #  MA 02110-1301, USA.
 #  
 
-# Defaults
-user="pi"
-server="pi64"
-server_dir="/home/pi"
-install_dir="$HOME/headless"
-
 # --help
 if [ "$1" = "--help" ]; then
 cat << EOF
 HEADLESS.sh
 
 Description:
-Connects to remote server, mounts sshfs, opens vncvierew
-and ssh. Cleans up when done. Supports multiple connections
-at a time.
+Connects to remote server, mounts sshfs, opens vncviewe and ssh. Cleans
+up when done. Supports multiple connections at a time. Useful for 
+connecting to headless systems such as raspberrypi. Usefull for quickly
+connecting with a new client.
 
 Usage:
-headless [no arguments will launch with default settings]
+headless [no arguments will launch with default.conf]
 headless [user] [server(ip/hostname)] [server_dir]
 headless [option]
 
-	--help			Display this message
-	--clean			Killall shfs and remove
-					empty mount directories
-	--config        Edit script to change defaults
-	--defaults		List default arguments
-	--install		Link to /usr/local/bin
-	--remove		Remove link to /usr/local/bin
+Options:
+-h	--help						Display help message
+	--clean						Stop all SSHFS sessions and remove empty 
+								mount dirs
+-c	--config [file]				Use a different config file
+-d	--defaults					Edit default.conf
+	--install					Link headless.sh to 
+								/usr/local/bin/headless
+	--sshsetup [user] [server]	Generate keys and share with server
+	--uninstall					Remove link /usr/local/bin/headless
 
-For VNC Connections put your exported vnc config file 
-(ie server.vnc) in the script directory.
+For VNC Connections to work put your exported vnc config file 
+(ie server.vnc) in the install directory.
 
 Installation:
 cd ~/
@@ -61,28 +59,72 @@ EOF
 exit 0
 fi
 
-# Variables
-sh="$USER@$HOSTNAME:$(pwd)\$"
+# Select config file
+if [ "$1" = "--config" ]||[ "$1" = "-c" ]&&[ "$#" = "2" ]; then
+	if [ -e $2.conf ]; then
+	config="$2.conf"
+	elif [ -e $2 ]; then
+	config="$2"
+	else
+	echo "ERROR! Configuration file $2 Not found. Exiting..."
+	exit 1
+	fi
+else
+config="default.conf"
+# Generate default.conf
+if [ ! -e default.conf ]; then
+echo "CAUTION! Generating default.conf"
+cat > default.conf<< EOF
+# Default config for headless
+# headless [no arguments will launch with default.conf]
+# headless [user] [server(ip/hostname)] [server_dir]
 
-# --defaults
-if [ "$1" = "--defaults" ]; then
-echo "Defaults: $user@$server:$server_dir"
-echo "Script Directory: $install_dir"
-echo "Goodbye :)"
-exit 0
+user="pi"
+server="pi64"
+server_dir="/home/pi"
+install_dir="$HOME/headless"
+EOF
+fi
 fi
 
-# --config
-if [ "$1" = "--config" ]; then
-nano "$0"
+# Load config file
+. $config
+
+# Variables
+sh="$USER@$HOSTNAME:\$"
+rootsh="root@$HOSTNAME:\$"
+
+# -d --defaults
+if [ "$1" = "--defaults" ]||[ "$1" = "-d" ]; then
+nano default.conf
 echo "Goodbye :)"
 exit 0
 fi
 
 # --install
 if [ "$1" = "--install" ]; then
-echo "$sh sudo ln -s $install_dir/headless.sh /usr/local/bin/headless"
+echo "$rootsh sudo ln -s $install_dir/headless.sh /usr/local/bin/headless"
 sudo ln -s "$install_dir/headless.sh" /usr/local/bin/headless
+echo "Goodbye :)"
+exit 0
+fi
+
+# --sshsetup
+if [ "$1" = "--sshsetup" ]&&[ "$#" = "3" ]; then
+user="$2"
+server="$3"
+echo "$sh ssh-keygen"
+ssh-keygen
+echo "$sh ssh-keygen $user@$server"
+ssh-copy-id $user@$server
+echo "Goodbye :)"
+exit 0
+fi
+
+# --uninstall
+if [ "$1" = "--uninstall" ]; then
+echo "$rootsh sudo rm /usr/local/bin/headless"
+sudo rm /usr/local/bin/headless
 echo "Goodbye :)"
 exit 0
 fi
@@ -92,8 +134,8 @@ if [ "$1" = "--clean" ]; then
 echo "$sh killall sshfs"
 killall sshfs
 sleep 1s
-echo "$sh rmdir ~/sshfs-*-*"
-rmdir ~/sshfs-*-*
+echo "$sh rmdir $install_dir/sshfs-*-*"
+rmdir $install_dir/sshfs-*-*
 echo "Goodbye :)"
 exit 0
 fi
@@ -110,12 +152,12 @@ fi
 
 # Make Mount Fxn
 mk_mnt () {
-if [ ! -d ~/sshfs-$user-${server} ]; then
-	echo "$sh mkdir ~/sshfs-$user-${server}"
-	mkdir ~/sshfs-$user-${server}
+if [ ! -d $install_dir/sshfs-$user-${server} ]; then
+	echo "$sh mkdir $install_dir/sshfs-$user-${server}"
+	mkdir $install_dir/sshfs-$user-${server}
 	dir_existed=0
 else
-	echo "CAUTION! ~/sshfs-$user-${server} already exists and will not be removed on exit"
+	echo "CAUTION! $install_dir/sshfs-$user-${server} already exists and will not be removed on exit"
 	dir_existed=1
 fi
 }
@@ -124,15 +166,15 @@ fi
 disconnect () {
 # Disconnect sshfs when ssh session is exited
 if [ $dir_existed = 0 ]; then
-	echo "$sh fusermount -u ~/sshfs-$user-${server}"
-	fusermount -u ~/sshfs-$user-${server}
+	echo "$sh fusermount -u $install_dir/sshfs-$user-${server}"
+	fusermount -u $install_dir/sshfs-$user-${server}
 	sleep 1s
-	echo "$sh rmdir ~/sshfs-$user-${server}"
-	rmdir ~/sshfs-$user-${server}
+	echo "$sh rmdir $install_dir/sshfs-$user-${server}"
+	rmdir $install_dir/sshfs-$user-${server}
 	echo "Goodbye :)"
 	exit 0
 elif [ $dir_existed = 1 ]; then
-	echo "CAUTION! ~/sshfs-$user-${server} must be manually unmounted and removed try:"
+	echo "CAUTION! $install_dir/sshfs-$user-${server} must be manually unmounted and removed try:"
 	echo "headless --clean"
 	echo "Goodbye :)"
 	exit 1
@@ -160,20 +202,19 @@ fi
 
 mk_mnt
 
-echo "$sh sshfs $user@${server}:${server_dir} ~/sshfs-$user-${server}"
-sshfs $user@${server}:${server_dir} ~/sshfs-$user-${server}
+echo "$sh sshfs $user@${server}:${server_dir} $install_dir/sshfs-$user-${server}"
+sshfs $user@${server}:${server_dir} $install_dir/sshfs-$user-${server}
 
 vnc_connect
 
-echo "$sh thunar ~/sshfs-$user-${server} &"
-thunar ~/sshfs-$user-${server} &
+echo "$sh thunar $install_dir/sshfs-$user-${server} &"
+thunar $install_dir/sshfs-$user-${server} &
 
 echo "$sh ssh $user@${server}"
 ssh $user@${server}
 
 disconnect
 }
-
 
 # Program
 # Exit Status:
@@ -182,7 +223,6 @@ disconnect
 # exit 3 = debug
 
 if [ $# = 0 ]; then
-	# if no argument then use defaults
 	connect
 fi
 
@@ -194,7 +234,9 @@ if [ $# = 3 ]; then
 	connect
 fi
 
-if [ $# -lt 3 ]; then
+if [ "$1" = "--config" ]||[ "$1" = "-c" ]&&[ "$#" -lt "3" ]; then
+	connect
+	else
 	echo "ERROR! not enough arguments. Exiting ..."
 	exit 1
 fi

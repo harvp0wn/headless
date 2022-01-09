@@ -2,4 +2,4 @@ archives/
 mount/
 *.vnc
 sshfs*/
-
+*.conf
