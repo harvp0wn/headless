@@ -67,10 +67,10 @@ fi
 
 # Select config file
 if [ "$1" = "--config" ]||[ "$1" = "-c" ]&&[ "$#" = "2" ]; then
-	if [ -e ${install_dir}/$2.conf ]; then
-	config="${install_dir/}$2.conf"
-	elif [ -e ${install_dir}/$2 ]; then
-	config="${install_dir}/$2"
+	if [ -e $2.conf ]; then
+	config="$2.conf"
+	elif [ -e $2 ]; then
+	config="$2"
 	else
 	echo "ERROR! Configuration file ${install_dir}/$2 Not found. Exiting..."
 	exit 1
